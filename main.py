@@ -28,6 +28,14 @@ def require_bridge_token(
 
 class PingBot(commands.Bot):
     async def setup_hook(self) -> None:
+        # Carga los comandos adicionales sin eliminar los que ya estén registrados.
+        try:
+            await self.load_extension("cogs.commands")
+            logger.info("Módulo cogs.commands cargado.")
+        except Exception:
+            logger.exception("No se pudo cargar cogs.commands; se conservará el resto del bot.")
+            raise
+
         synced_commands = await self.tree.sync()
         logger.info("Sincronizados %s comandos de aplicación.", len(synced_commands))
 
@@ -43,6 +51,7 @@ class PingBot(commands.Bot):
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 bot = PingBot(
     command_prefix=commands.when_mentioned,
     intents=intents,
