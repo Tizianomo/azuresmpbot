@@ -32,6 +32,8 @@ class PingBot(commands.Bot):
         try:
             await self.load_extension("cogs.commands")
             logger.info("Módulo cogs.commands cargado.")
+            await self.load_extension("cogs.pro_features")
+            logger.info("Módulo cogs.pro_features cargado.")
         except Exception:
             logger.exception("No se pudo cargar cogs.commands; se conservará el resto del bot.")
             raise
