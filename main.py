@@ -4,6 +4,7 @@ import logging
 import os
 
 import discord
+from discord import app_commands
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -58,6 +59,36 @@ bot = PingBot(
     command_prefix=commands.when_mentioned,
     intents=intents,
 )
+
+@bot.tree.error
+async def on_app_command_error(
+    interaction: discord.Interaction,
+    error: app_commands.AppCommandError,
+) -> None:
+    original = getattr(error, "original", error)
+    command_name = interaction.command.qualified_name if interaction.command else "desconocido"
+
+    if isinstance(error, app_commands.CheckFailure):
+        message = "No tenés permisos para usar este comando."
+    elif isinstance(original, discord.Forbidden):
+        message = "Discord me negó el permiso necesario. Revisá mis permisos y la jerarquía de roles."
+    else:
+        message = "Ocurrió un error al ejecutar el comando. El error quedó registrado en la consola; avisale al administrador."
+
+    logger.error(
+        "Error en /%s: %s",
+        command_name,
+        type(original).__name__,
+        exc_info=(type(original), original, original.__traceback__),
+    )
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+    except discord.HTTPException:
+        logger.exception("No se pudo responder al error del comando /%s.", command_name)
+
 api = FastAPI(
     title="Discord bot internal bridge",
     docs_url=None,
