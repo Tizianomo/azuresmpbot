@@ -44,13 +44,15 @@ class TicketCloseView(discord.ui.View):
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message("No se pudo verificar tu usuario.", ephemeral=True)
             return
-        allowed = interaction.user.guild_permissions.manage_channels or interaction.user.id == channel.topic_owner_id if hasattr(channel, "topic_owner_id") else interaction.user.guild_permissions.manage_channels
-        if not allowed:
-            # Ticket creator is also allowed, based on the channel topic set on creation.
-            topic = channel.topic or ""
-            if f"owner:{interaction.user.id}" not in topic:
-                await interaction.response.send_message("Solo quien abrió el ticket o el staff puede cerrarlo.", ephemeral=True)
-                return
+        topic = channel.topic or ""
+        is_owner = f"owner:{interaction.user.id}" in topic
+        staff_role_id = read_data().get("ticket_staff_role", {}).get(str(channel.guild.id))
+        is_staff = interaction.user.guild_permissions.manage_channels or bool(
+            staff_role_id and any(role.id == int(staff_role_id) for role in interaction.user.roles)
+        )
+        if not (is_owner or is_staff):
+            await interaction.response.send_message("Solo quien abrió el ticket o el staff puede cerrarlo.", ephemeral=True)
+            return
         await interaction.response.send_message("Ticket cerrado. El canal se eliminará en unos segundos.", ephemeral=True)
         await channel.delete(reason=f"Ticket cerrado por {interaction.user}")
 
@@ -95,7 +97,7 @@ class TicketPanelView(discord.ui.View):
         if guild is None or not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message("Usá este botón dentro del servidor.", ephemeral=True)
             return
-        existing = discord.utils.get(guild.text_channels, topic=f"owner:{interaction.user.id}")
+        existing = next((channel for channel in guild.text_channels if (channel.topic or "").startswith(f"owner:{interaction.user.id}")), None)
         if existing is not None:
             await interaction.response.send_message(f"Ya tenés un ticket abierto: {existing.mention}", ephemeral=True)
             return
@@ -290,19 +292,6 @@ class AzureFeatures(commands.Cog):
         if isinstance(channel, discord.TextChannel):
             try:
                 await channel.send(message)
-            except discord.HTTPException:
-                pass
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot or message.guild is None:
-            return
-        data = read_data()
-        channel_id = data.get("log_channel", {}).get(str(message.guild.id))
-        channel = message.guild.get_channel(int(channel_id)) if channel_id else None
-        if isinstance(channel, discord.TextChannel):
-            try:
-                await channel.send(f"💬 Mensaje en {message.channel.mention} de **{message.author}**.")
             except discord.HTTPException:
                 pass
 
