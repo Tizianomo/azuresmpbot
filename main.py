@@ -153,8 +153,10 @@ def get_text_channel(channel_id: str) -> discord.TextChannel:
 
 @bot.tree.command(name="ping", description="Comprueba si el bot está conectado.")
 async def ping(interaction: discord.Interaction) -> None:
+    # Acknowledge immediately so Discord does not expire the interaction.
+    await interaction.response.defer(thinking=False)
     latency_ms = round(bot.latency * 1000)
-    await interaction.response.send_message(f"Pong! Latencia: {latency_ms} ms.")
+    await interaction.followup.send(f"Pong! Latencia: {latency_ms} ms.")
 
 
 @api.get("/internal/status")
