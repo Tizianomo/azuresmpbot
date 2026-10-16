@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import random
 from datetime import timedelta
@@ -11,6 +12,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+logger = logging.getLogger("azure_commands")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 DATA_FILE = Path(os.getenv("AZURE_DATA_FILE", "azure_data.json"))
 
@@ -371,7 +373,21 @@ async def setup(bot: commands.Bot):
     for command_name, description in COMMANDS:
         def make_callback(fixed_name):
             async def callback(interaction: discord.Interaction, argumento: str = ""):
-                await execute(bot, interaction, fixed_name, argumento)
+                try:
+                    await execute(bot, interaction, fixed_name, argumento)
+                except Exception as error:
+                    logger.exception("Error ejecutando /%s", fixed_name)
+                    message = (
+                        "No pude completar ese comando. Revisá los permisos del bot y del canal; "
+                        "el error quedó registrado en la consola."
+                    )
+                    try:
+                        if interaction.response.is_done():
+                            await interaction.followup.send(message, ephemeral=True)
+                        else:
+                            await interaction.response.send_message(message, ephemeral=True)
+                    except discord.HTTPException:
+                        logger.exception("No se pudo responder a la interacción /%s", fixed_name)
             callback.__name__ = "command_" + fixed_name.replace("-", "_")
             return callback
         bot.tree.add_command(app_commands.Command(name=command_name, description=description, callback=make_callback(command_name)))
