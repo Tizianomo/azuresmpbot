@@ -138,13 +138,17 @@ class AzureFeatures(commands.Cog):
     @app_commands.command(name="ticketpanel", description="Publica el panel para abrir tickets de soporte")
     @app_commands.check(is_admin)
     async def ticketpanel(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         embed = discord.Embed(
             title="🎫 Centro de soporte • AzureSMP",
-            description="Necesitás ayuda? Presioná **Crear ticket** para abrir un canal privado con el staff.",
+            description="¿Necesitás ayuda? Presioná **Crear ticket** para abrir un canal privado con el staff.",
             color=discord.Color.blurple(),
         )
+        if not isinstance(interaction.channel, discord.TextChannel):
+            await interaction.followup.send("Usá este comando dentro de un canal de texto.", ephemeral=True)
+            return
         await interaction.channel.send(embed=embed, view=TicketPanelView())
-        await interaction.response.send_message("Panel de tickets publicado.", ephemeral=True)
+        await interaction.followup.send("Panel de tickets publicado.", ephemeral=True)
 
     @app_commands.command(name="applystaff", description="Abre el formulario para postularte al Staff")
     async def applystaff(self, interaction: discord.Interaction):
@@ -256,21 +260,62 @@ class AzureFeatures(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
+        guild = member.guild
+        guild_key = str(guild.id)
         data = read_data()
-        welcome_id = data.get("welcome_channel", {}).get(str(member.guild.id))
-        welcome = member.guild.get_channel(int(welcome_id)) if welcome_id else None
+
+        # Número persistente de llegada: conserva el orden aunque el bot se reinicie.
+        current_count = guild.member_count or len(guild.members)
+        previous_number = int(data.get("join_numbers", {}).get(guild_key, 0))
+        join_number = max(previous_number + 1, current_count)
+        data.setdefault("join_numbers", {})[guild_key] = join_number
+        write_data(data)
+
+        welcome_id = data.get("welcome_channel", {}).get(guild_key)
+        welcome = guild.get_channel(int(welcome_id)) if welcome_id else None
         if isinstance(welcome, discord.TextChannel):
-            embed = discord.Embed(
-                title="¡Bienvenido a AzureSMP!",
-                description=f"¡Hola {member.mention}! Ahora somos **{member.guild.member_count}** miembros.",
-                color=discord.Color.green(),
+            rules_channel = next(
+                (
+                    channel for channel in guild.text_channels
+                    if any(word in channel.name.casefold() for word in ("normas", "reglas", "rules"))
+                ),
+                None,
             )
+            rules_text = (
+                f"📜 Antes de participar, leé la normativa en {rules_channel.mention} y respetá a toda la comunidad."
+                if rules_channel
+                else "📜 Antes de participar, recordá leer y respetar la normativa del servidor."
+            )
+            embed = discord.Embed(
+                title=f"¡Te damos la bienvenida a {guild.name}!",
+                description=(
+                    f"¡Hola, {member.mention}! 👋\n\n"
+                    f"Nos alegra que hayas llegado a **{guild.name}**. Queremos que te sientas parte de la comunidad, "
+                    "conozcas a los demás y disfrutes del servidor. Si necesitás ayuda, podés consultar al equipo de staff.\n\n"
+                    f"⭐ **¡Sos nuestro miembro número #{join_number}!**\n\n"
+                    f"{rules_text}\n\n"
+                    "Tomate un momento para conocer los canales, revisar la información importante y mantener un ambiente "
+                    "respetuoso. ¡Esperamos que tengas una gran experiencia con nosotros!"
+                ),
+                color=discord.Color.from_rgb(0, 179, 255),
+                timestamp=discord.utils.utcnow(),
+            )
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.add_field(name="👤 Perfil", value=f"**Nombre:** {member.mention}\n**Usuario:** {discord.utils.escape_markdown(member.name)}", inline=True)
+            embed.add_field(name="🗓️ Cuenta creada", value=discord.utils.format_dt(member.created_at, style="D"), inline=True)
+            embed.add_field(name="🚪 Ingreso al servidor", value=discord.utils.format_dt(member.joined_at or discord.utils.utcnow(), style="F"), inline=False)
+            embed.add_field(name="🆔 Identificador", value=str(member.id), inline=True)
+            embed.set_footer(text=f"{guild.name} • ¡Gracias por unirte!", icon_url=guild.icon.url if guild.icon else None)
             try:
-                await welcome.send(embed=embed, allowed_mentions=discord.AllowedMentions(users=True))
+                await welcome.send(
+                    content=f"¡Bienvenido/a, {member.mention}!",
+                    embed=embed,
+                    allowed_mentions=discord.AllowedMentions(users=True),
+                )
             except discord.HTTPException:
                 pass
-        await self.update_stats(member.guild)
-        await self.log_event(member.guild, f"📥 {member} se unió al servidor.")
+        await self.update_stats(guild)
+        await self.log_event(guild, f"📥 {member} se unió al servidor. Miembro de llegada #{join_number}.")
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
