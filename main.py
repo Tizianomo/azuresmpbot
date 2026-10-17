@@ -27,7 +27,7 @@ runtime_token: str | None = None
 def require_bridge_token(
     token: str | None = Header(default=None, alias="X-Discord-Bridge-Token"),
 ) -> None:
-    expected = os.getenv("DISCORD_BOT_BRIDGE_TOKEN") or os.getenv("DISCORD_BOT_TOKEN")
+    expected = os.getenv("DISCORD_BOT_BRIDGE_TOKEN")
     if not expected or not token or not secrets.compare_digest(token, expected):
         raise HTTPException(status_code=401, detail="No autorizado.")
 
