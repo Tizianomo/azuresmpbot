@@ -9,6 +9,7 @@ import discord
 from discord import app_commands
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from discord.ext import commands
 
@@ -101,6 +102,13 @@ api = FastAPI(
     redoc_url=None,
     openapi_url=None,
     dependencies=[Depends(require_bridge_token)],
+)
+api.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in os.getenv("DASHBOARD_ORIGINS", "*").split(",") if origin.strip()],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
