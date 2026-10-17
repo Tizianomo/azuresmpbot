@@ -293,15 +293,15 @@ class Economy(commands.Cog):
     async def casino(self,ctx,bet:str,game:str,choice:str=""):
         d,p=self.profile(ctx); stake=parse_amount(bet,p["wallet"])
         if not 0<stake<=p["wallet"]: return await ctx.reply("Apuesta inválida o saldo insuficiente.",mention_author=False)
-        win=False; multiplier=1; detail=""
+        win=False; multiplier=2; detail=""
         if game=="slots":
             roll=[random.choice(["🍒","🍋","🍇","💎","7️⃣"]) for _ in range(3)]; count=max(roll.count(s) for s in set(roll)); multiplier=5 if count==3 else 1 if count==2 else 0; detail=" ".join(roll); win=multiplier>0
         elif game=="coinflip":
             side=random.choice(["cara","cruz"]); win=choice.lower() in (side,"heads" if side=="cara" else "tails"); detail=f"salió {side}"
         elif game=="dice":
             n=random.randint(1,6)
-            if choice and choice.isdigit(): win=n==int(choice); multiplier=4
-            else: win=n>=4
+            if choice and choice.isdigit(): win=n==int(choice); multiplier=6
+            else: win=n>=4; multiplier=2
             detail=f"salió {n}"
         elif game=="scratch":
             roll=[random.choice(["⭐","🍀","💎","🍒","7️⃣"]) for _ in range(3)]; count=max(roll.count(s) for s in set(roll)); multiplier=4 if count==3 else 1 if count==2 else 0; detail=" ".join(roll); win=multiplier>0
@@ -314,7 +314,7 @@ class Economy(commands.Cog):
             win=choice.lower() in (color,{"red":"rojo","black":"negro","green":"verde"}.get(color))
             if choice.lower() in ("par","even"): win=n!=0 and n%2==0
             if choice.lower() in ("impar","odd"): win=n%2==1
-            if color=="green" and win: multiplier=14
+            if color=="green" and win: multiplier=36
         elif game=="hilo":
             a,b=random.randint(1,13),random.randint(1,13); detail=f"{a} → {b}"
             if a==b: return await ctx.reply(f"🤝 Empate ({detail}). No cambia tu saldo.",mention_author=False)
@@ -325,7 +325,8 @@ class Economy(commands.Cog):
             win=a<=21 and (b>21 or a>b)
             if a>21: win=False
         if win:
-            amount=stake*multiplier; p["wallet"]+=amount; p["stats"]["won"]+=amount; msg=f"🎉 Ganaste **{money(amount)}** ({detail})."
+            amount=stake*max(0,multiplier-1); p["wallet"]+=amount; p["stats"]["won"]+=amount
+            msg=f"🎉 Ganancia neta: **{money(amount)}** ({detail})." if amount else f"🎲 {detail}: recuperaste la apuesta; no hubo ganancia neta."
         else:
             p["wallet"]-=stake; p["stats"]["lost"]+=stake; msg=f"🎲 Perdiste **{money(stake)}** ({detail})."
         write_data(d); await ctx.reply(msg,mention_author=False)
