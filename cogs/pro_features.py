@@ -201,7 +201,6 @@ class AzureFeatures(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="ticketpanel", description="Publica el panel para abrir tickets de soporte")
-    @app_commands.check(is_admin)
     async def ticketpanel(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         embed = discord.Embed(
@@ -230,7 +229,6 @@ class AzureFeatures(commands.Cog):
 
     @app_commands.command(name="setticketstaff", description="Configura el rol que podrá ver los tickets")
     @app_commands.describe(rol="Rol de soporte")
-    @app_commands.check(is_admin)
     async def setticketstaff(self, interaction: discord.Interaction, rol: discord.Role):
         data = read_data()
         data.setdefault("ticket_staff_role", {})[str(interaction.guild_id)] = rol.id
@@ -239,7 +237,6 @@ class AzureFeatures(commands.Cog):
 
     @app_commands.command(name="setticketcategory", description="Configura la categoría donde se crearán tickets")
     @app_commands.describe(categoria="Categoría de Discord para los tickets")
-    @app_commands.check(is_admin)
     async def setticketcategory(self, interaction: discord.Interaction, categoria: discord.CategoryChannel):
         data = read_data()
         data.setdefault("ticket_category", {})[str(interaction.guild_id)] = categoria.id
