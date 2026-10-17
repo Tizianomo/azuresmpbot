@@ -35,6 +35,8 @@ class PingBot(commands.Bot):
             logger.info("Módulo cogs.commands cargado.")
             await self.load_extension("cogs.pro_features")
             logger.info("Módulo cogs.pro_features cargado.")
+            await self.load_extension("cogs.economy")
+            logger.info("Módulo cogs.economy cargado.")
         except Exception:
             logger.exception("No se pudo cargar cogs.commands; se conservará el resto del bot.")
             raise
@@ -56,7 +58,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 bot = PingBot(
-    command_prefix=commands.when_mentioned,
+    command_prefix=commands.when_mentioned_or("."),
     intents=intents,
 )
 
