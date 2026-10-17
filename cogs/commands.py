@@ -74,9 +74,11 @@ async def execute(bot, interaction, name, argument):
         for title, value in [
             ("Información", "/ping /help /botinfo /serverinfo /userinfo /avatar /banner /roleinfo /channelinfo /invite /membercount"),
             ("Moderación", "/clear /kick /ban /unban /timeout /untimeout /warn /warnings /purgeuser /slowmode"),
+            ("Sanciones", ".warn @usuario motivo · .sanciones [@usuario]"),
+            ("Economía", ".balance · .daily · .work · .jobs · .fish · .mine · .rob @usuario · .bank · .deposit · .withdraw · .shopitems · .buy llave · .opencrate · .inventory"),
             ("Comunidad", "/poll /suggest /announce /welcome /goodbye /serverrules /say /embed /remind /setlog"),
             ("Diversión", "/coinflip /dice /8ball /choose /rps /joke /compliment /ship /meme /fact"),
-            ("Administración", "/online /offline /setstatus /setnick /roleadd /roleremove /lock /unlock /sync")
+            ("Administración", "/panelvere · /online /offline /setstatus /setnick /roleadd /roleremove /lock /unlock /sync")
         ]:
             embed.add_field(name=title, value=value, inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
