@@ -273,6 +273,15 @@ class AzureFeatures(commands.Cog):
 
         welcome_id = data.get("welcome_channel", {}).get(guild_key)
         welcome = guild.get_channel(int(welcome_id)) if welcome_id else None
+        # Si no se configuró un canal por ID, buscar automáticamente #bienvenidas.
+        if not isinstance(welcome, discord.TextChannel):
+            welcome = next(
+                (
+                    channel for channel in guild.text_channels
+                    if any(word in channel.name.casefold() for word in ("bienvenidas", "bienvenida", "welcome"))
+                ),
+                None,
+            )
         if isinstance(welcome, discord.TextChannel):
             rules_channel = next(
                 (
