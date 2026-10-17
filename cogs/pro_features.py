@@ -196,6 +196,83 @@ class TicketPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(TicketOpenSelect())
 
+class VerificationView(discord.ui.View):
+    """Botón persistente para entregar el rol de verificación."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Verificarme",
+        style=discord.ButtonStyle.success,
+        emoji="🔓",
+        custom_id="azure_verify_member",
+    )
+    async def verify_member(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        guild = interaction.guild
+        member = interaction.user
+        if guild is None or not isinstance(member, discord.Member):
+            await interaction.response.send_message(
+                "Usá este botón dentro del servidor.", ephemeral=True
+            )
+            return
+
+        role = discord.utils.get(guild.roles, name="| AZULEJO |")
+        if role is None:
+            await interaction.response.send_message(
+                "Todavía no existe el rol **| AZULEJO |**. Avisale a un administrador para que publique el panel con /verificacion.",
+                ephemeral=True,
+            )
+            return
+
+        if role in member.roles:
+            await interaction.response.send_message(
+                "Ya estás verificado. ¡Disfrutá de AzureSMP!", ephemeral=True
+            )
+            return
+
+        bot_member = guild.me
+        if bot_member is None or not bot_member.guild_permissions.manage_roles:
+            await interaction.response.send_message(
+                "No puedo asignar roles. Un administrador debe darme el permiso **Gestionar roles**.",
+                ephemeral=True,
+            )
+            return
+        if role >= bot_member.top_role:
+            await interaction.response.send_message(
+                "No puedo asignar ese rol porque está por encima de mi rol. Un administrador debe mover el rol del bot por encima de **| AZULEJO |**.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            await member.add_roles(
+                role,
+                reason=f"Verificación de AzureSMP mediante botón por {member}",
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "Discord rechazó la asignación. Revisá el permiso Gestionar roles y la jerarquía de roles del bot.",
+                ephemeral=True,
+            )
+            return
+        except discord.HTTPException:
+            await interaction.response.send_message(
+                "No pude completar la verificación. Intentá nuevamente en unos segundos.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.send_message(
+            "✅ ¡Verificación completada! Recibiste el rol **| AZULEJO |**. Ya podés acceder a los canales habilitados para ese rol.",
+            ephemeral=True,
+        )
+
+
 class AzureFeatures(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -213,6 +290,65 @@ class AzureFeatures(commands.Cog):
             return
         await interaction.channel.send(embed=embed, view=TicketPanelView())
         await interaction.followup.send("Panel de tickets publicado.", ephemeral=True)
+
+    @app_commands.command(name="verificacion", description="Publica el panel de verificación en este canal")
+    @app_commands.check(is_admin)
+    async def verificacion(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if guild is None or not isinstance(interaction.channel, discord.TextChannel):
+            await interaction.response.send_message(
+                "Usá este comando dentro de un canal de texto del servidor.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        role = discord.utils.get(guild.roles, name="| AZULEJO |")
+        if role is None:
+            bot_member = guild.me
+            if bot_member is None or not bot_member.guild_permissions.manage_roles:
+                await interaction.followup.send(
+                    "Necesito el permiso **Gestionar roles** para crear el rol | AZULEJO |.",
+                    ephemeral=True,
+                )
+                return
+            try:
+                role = await guild.create_role(
+                    name="| AZULEJO |",
+                    colour=discord.Colour.from_rgb(0, 179, 255),
+                    reason="Rol de miembros verificados de AzureSMP",
+                )
+            except discord.Forbidden:
+                await interaction.followup.send(
+                    "No pude crear el rol. Revisá que tenga el permiso Gestionar roles.",
+                    ephemeral=True,
+                )
+                return
+
+        embed = discord.Embed(
+            title="🔷 Verificación | AzureSMP",
+            description=(
+                "¡Bienvenido a **AzureSMP**!\n\n"
+                "Para desbloquear el acceso a los canales de la comunidad, "
+                "pulsá el botón **Verificarme** de abajo.\n\n"
+                "Al completar la verificación recibirás el rol **| AZULEJO |**."
+            ),
+            color=discord.Color.from_rgb(0, 179, 255),
+        )
+        embed.set_footer(text="AzureSMP • Verificación")
+        try:
+            await interaction.channel.send(embed=embed, view=VerificationView())
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "No puedo publicar el panel en este canal. Revisá los permisos para ver el canal y enviar mensajes.",
+                ephemeral=True,
+            )
+            return
+        await interaction.followup.send(
+            f"Panel publicado en {interaction.channel.mention}. El rol **| AZULEJO |** está listo. "
+            "Recordá configurar los permisos de las categorías/canales para que @everyone no verificado no los vea y el rol | AZULEJO | sí pueda verlos.",
+            ephemeral=True,
+        )
 
     @app_commands.command(name="applystaff", description="Abre el formulario para postularte al Staff")
     async def applystaff(self, interaction: discord.Interaction):
@@ -418,6 +554,7 @@ class AzureFeatures(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
+    bot.add_view(VerificationView())
     bot.add_view(TicketPanelView())
     bot.add_view(TicketCloseView())
     await bot.add_cog(AzureFeatures(bot))
