@@ -87,49 +87,114 @@ class StaffApplicationModal(discord.ui.Modal, title="Postulación para Staff"):
         await interaction.response.send_message("¡Tu postulación fue enviada al equipo de Staff!", ephemeral=True)
 
 
+class TicketOpenSelect(discord.ui.Select):
+    def __init__(self):
+        super().__init__(
+            placeholder="Seleccioná una opción...",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(
+                    label="Abrir ticket",
+                    description="Crear un canal privado con el equipo de soporte",
+                    emoji="🎫",
+                    value="open_ticket",
+                )
+            ],
+            custom_id="azure_ticket_select",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "Usá este menú dentro del servidor.", ephemeral=True
+            )
+            return
+
+        existing = next(
+            (
+                channel for channel in guild.text_channels
+                if (channel.topic or "").startswith(f"owner:{interaction.user.id}")
+            ),
+            None,
+        )
+        if existing:
+            await interaction.response.send_message(
+                f"Ya tenés un ticket abierto: {existing.mention}", ephemeral=True
+            )
+            return
+
+        data = read_data()
+        category_id = data.get("ticket_category", {}).get(str(guild.id))
+        category = guild.get_channel(int(category_id)) if category_id else None
+        staff_id = data.get("ticket_staff_role", {}).get(str(guild.id))
+        staff_role = guild.get_role(int(staff_id)) if staff_id else None
+
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True
+            ),
+        }
+        bot_member = guild.me
+        if bot_member:
+            overwrites[bot_member] = discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, manage_channels=True,
+                read_message_history=True
+            )
+        if staff_role:
+            overwrites[staff_role] = discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True
+            )
+
+        safe_name = "".join(
+            c.lower() if c.isalnum() else "-"
+            for c in interaction.user.name
+        )[:20].strip("-") or "usuario"
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            channel = await guild.create_text_channel(
+                name=f"ticket-{safe_name}",
+                category=(
+                    category if isinstance(category, discord.CategoryChannel) else None
+                ),
+                overwrites=overwrites,
+                topic=f"owner:{interaction.user.id} | Ticket de {interaction.user}",
+                reason=f"Ticket abierto por {interaction.user}",
+            )
+            embed = discord.Embed(
+                title="🎫 Soporte AzureSMP",
+                description=(
+                    f"Hola {interaction.user.mention}.\n\n"
+                    "Explicá tu consulta y el equipo de staff te ayudará lo antes posible.\n\n"
+                    "🔒 No compartas contraseñas ni tokens."
+                ),
+                color=discord.Color.from_rgb(0, 179, 255),
+            )
+            embed.set_footer(text="AzureSMP • Centro de soporte")
+            await channel.send(
+                content=interaction.user.mention,
+                embed=embed,
+                view=TicketCloseView(),
+                allowed_mentions=discord.AllowedMentions(users=True),
+            )
+            await interaction.followup.send(
+                f"Tu ticket está listo: {channel.mention}", ephemeral=True
+            )
+        except discord.HTTPException:
+            await interaction.followup.send(
+                "No pude crear el ticket. Revisá que el bot tenga permisos para "
+                "administrar canales, ver canales y enviar mensajes.",
+                ephemeral=True,
+            )
+
+
 class TicketPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-
-    @discord.ui.button(label="Crear ticket", style=discord.ButtonStyle.primary, emoji="🎫", custom_id="azure_ticket_create")
-    async def create_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild = interaction.guild
-        if guild is None or not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message("Usá este botón dentro del servidor.", ephemeral=True)
-            return
-        existing = next((channel for channel in guild.text_channels if (channel.topic or "").startswith(f"owner:{interaction.user.id}")), None)
-        if existing is not None:
-            await interaction.response.send_message(f"Ya tenés un ticket abierto: {existing.mention}", ephemeral=True)
-            return
-        data = read_data()
-        configured_category_id = data.get("ticket_category", {}).get(str(guild.id))
-        category = guild.get_channel(int(configured_category_id)) if configured_category_id else None
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-        }
-        if guild.me:
-            overwrites[guild.me] = discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True, read_message_history=True)
-        staff_role_id = data.get("ticket_staff_role", {}).get(str(guild.id))
-        staff_role = guild.get_role(int(staff_role_id)) if staff_role_id else None
-        if staff_role:
-            overwrites[staff_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
-        safe_name = "".join(c.lower() if c.isalnum() else "-" for c in interaction.user.name)[:20].strip("-") or "usuario"
-        channel = await guild.create_text_channel(
-            name=f"ticket-{safe_name}",
-            category=category if isinstance(category, discord.CategoryChannel) else None,
-            overwrites=overwrites,
-            topic=f"owner:{interaction.user.id} | Ticket de {interaction.user}",
-            reason=f"Ticket abierto por {interaction.user}",
-        )
-        embed = discord.Embed(
-            title="🎫 Soporte AzureSMP",
-            description=f"Hola {interaction.user.mention}. Explicá tu consulta y el equipo te ayudará pronto.\n\nNo compartas contraseñas ni tokens.",
-            color=discord.Color.blurple(),
-        )
-        await channel.send(content=interaction.user.mention, embed=embed, view=TicketCloseView(), allowed_mentions=discord.AllowedMentions(users=True))
-        await interaction.response.send_message(f"Tu ticket está listo: {channel.mention}", ephemeral=True)
-
+        self.add_item(TicketOpenSelect())
 
 class AzureFeatures(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -141,7 +206,7 @@ class AzureFeatures(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         embed = discord.Embed(
             title="🎫 Centro de soporte • AzureSMP",
-            description="¿Necesitás ayuda? Presioná **Crear ticket** para abrir un canal privado con el staff.",
+            description="¿Necesitás ayuda? Seleccioná **Abrir ticket** en el menú de abajo para crear un canal privado con el equipo de staff.",
             color=discord.Color.blurple(),
         )
         if not isinstance(interaction.channel, discord.TextChannel):
