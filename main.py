@@ -36,11 +36,14 @@ class PingBot(commands.Bot):
     async def setup_hook(self) -> None:
         # Carga los comandos adicionales sin eliminar los que ya estén registrados.
         try:
-            await self.load_extension("cogs.commands")
+            if "cogs.commands" not in self.extensions:
+                await self.load_extension("cogs.commands")
             logger.info("Módulo cogs.commands cargado.")
-            await self.load_extension("cogs.pro_features")
+            if "cogs.pro_features" not in self.extensions:
+                await self.load_extension("cogs.pro_features")
             logger.info("Módulo cogs.pro_features cargado.")
-            await self.load_extension("cogs.economy")
+            if "cogs.economy" not in self.extensions:
+                await self.load_extension("cogs.economy")
             logger.info("Módulo cogs.economy cargado.")
         except Exception:
             logger.exception("No se pudo cargar cogs.commands; se conservará el resto del bot.")
