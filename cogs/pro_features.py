@@ -291,13 +291,18 @@ class AzureFeatures(commands.Cog):
         await interaction.channel.send(embed=embed, view=TicketPanelView())
         await interaction.followup.send("Panel de tickets publicado.", ephemeral=True)
 
-    @app_commands.command(name="verificacion", description="Publica el panel de verificación en este canal")
+    @app_commands.command(name="verificacionpanel", description="Publica el panel y configura la categoría privada para miembros verificados")
+    @app_commands.describe(categoria="Categoría cuyos canales solo verán los miembros verificados")
     @app_commands.check(is_admin)
-    async def verificacion(self, interaction: discord.Interaction):
+    async def verificacionpanel(
+        self,
+        interaction: discord.Interaction,
+        categoria: discord.CategoryChannel,
+    ):
         guild = interaction.guild
         if guild is None or not isinstance(interaction.channel, discord.TextChannel):
             await interaction.response.send_message(
-                "Usá este comando dentro de un canal de texto del servidor.",
+                "Usá este comando dentro de un canal de texto del servidor, por ejemplo #verificacion.",
                 ephemeral=True,
             )
             return
@@ -325,12 +330,50 @@ class AzureFeatures(commands.Cog):
                 )
                 return
 
+        bot_member = guild.me
+        if bot_member is None or not bot_member.guild_permissions.manage_roles:
+            await interaction.followup.send(
+                "Necesito el permiso **Gestionar roles** para configurar la verificación.",
+                ephemeral=True,
+            )
+            return
+        if role >= bot_member.top_role:
+            await interaction.followup.send(
+                "Mové el rol del bot por encima de **| AZULEJO |** en Ajustes del servidor → Roles.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            await categoria.set_permissions(
+                guild.default_role,
+                view_channel=False,
+                reason="Ocultar categoría a miembros no verificados de AzureSMP",
+            )
+            await categoria.set_permissions(
+                role,
+                view_channel=True,
+                reason="Permitir acceso a la categoría a miembros verificados de AzureSMP",
+            )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "No pude cambiar los permisos de la categoría. Revisá que el bot tenga permisos para gestionar canales y roles.",
+                ephemeral=True,
+            )
+            return
+        except discord.HTTPException:
+            await interaction.followup.send(
+                "Discord no permitió actualizar la categoría. Intentá nuevamente.",
+                ephemeral=True,
+            )
+            return
+
         embed = discord.Embed(
             title="🔷 Verificación | AzureSMP",
             description=(
-                "¡Bienvenido a **AzureSMP**!\n\n"
+                "¡Bienvenido a **AzureSMP**!\\n\\n"
                 "Para desbloquear el acceso a los canales de la comunidad, "
-                "pulsá el botón **Verificarme** de abajo.\n\n"
+                "pulsá el botón **Verificarme** de abajo.\\n\\n"
                 "Al completar la verificación recibirás el rol **| AZULEJO |**."
             ),
             color=discord.Color.from_rgb(0, 179, 255),
@@ -344,9 +387,11 @@ class AzureFeatures(commands.Cog):
                 ephemeral=True,
             )
             return
+
         await interaction.followup.send(
-            f"Panel publicado en {interaction.channel.mention}. El rol **| AZULEJO |** está listo. "
-            "Recordá configurar los permisos de las categorías/canales para que @everyone no verificado no los vea y el rol | AZULEJO | sí pueda verlos.",
+            f"Panel publicado en {interaction.channel.mention}.\\n"
+            f"La categoría {categoria.mention} ahora oculta sus canales a @everyone y permite verlos al rol **| AZULEJO |**.\\n\\n"
+            "Importante: los canales sincronizados heredan estos permisos. Revisá los canales no sincronizados y asegurate de que #verificacion esté fuera de esa categoría o siga siendo visible para @everyone.",
             ephemeral=True,
         )
 
