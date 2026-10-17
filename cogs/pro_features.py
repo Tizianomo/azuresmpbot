@@ -203,7 +203,7 @@ class VerificationView(discord.ui.View):
         super().__init__(timeout=None)
 
     @discord.ui.button(
-        label="Verificarme",
+        label="Verificación",
         style=discord.ButtonStyle.success,
         emoji="🔓",
         custom_id="azure_verify_member",
