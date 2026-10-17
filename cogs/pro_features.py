@@ -224,7 +224,7 @@ class VerificationView(discord.ui.View):
         role = discord.utils.get(guild.roles, name="| AZULEJO |")
         if role is None:
             await interaction.response.send_message(
-                "Todavía no existe el rol **| AZULEJO |**. Avisale a un administrador para que publique el panel con /verificacion.",
+                "Todavía no existe el rol **| AZULEJO |**. Avisale a un administrador para que publique el panel con /panelvere.",
                 ephemeral=True,
             )
             return
@@ -291,29 +291,29 @@ class AzureFeatures(commands.Cog):
         await interaction.channel.send(embed=embed, view=TicketPanelView())
         await interaction.followup.send("Panel de tickets publicado.", ephemeral=True)
 
-    @app_commands.command(name="verificacionpanel", description="Publica el panel y configura la categoría privada para miembros verificados")
-    @app_commands.describe(categoria="Categoría cuyos canales solo verán los miembros verificados")
+    @app_commands.command(name="panelvere", description="Publica el panel de verificación en este canal")
+    @app_commands.describe(categoria="Opcional: categoría que quedará visible solo para miembros verificados")
     @app_commands.check(is_admin)
-    async def verificacionpanel(
+    async def panelvere(
         self,
         interaction: discord.Interaction,
-        categoria: discord.CategoryChannel,
+        categoria: discord.CategoryChannel | None = None,
     ):
         guild = interaction.guild
         if guild is None or not isinstance(interaction.channel, discord.TextChannel):
             await interaction.response.send_message(
-                "Usá este comando dentro de un canal de texto del servidor, por ejemplo #verificacion.",
+                "Usá este comando dentro de un canal de texto, por ejemplo #verificacion.",
                 ephemeral=True,
             )
             return
 
         await interaction.response.defer(ephemeral=True, thinking=True)
         role = discord.utils.get(guild.roles, name="| AZULEJO |")
+        bot_member = guild.me
         if role is None:
-            bot_member = guild.me
             if bot_member is None or not bot_member.guild_permissions.manage_roles:
                 await interaction.followup.send(
-                    "Necesito el permiso **Gestionar roles** para crear el rol | AZULEJO |.",
+                    "Necesito el permiso Gestionar roles para crear el rol | AZULEJO |.",
                     ephemeral=True,
                 )
                 return
@@ -325,55 +325,55 @@ class AzureFeatures(commands.Cog):
                 )
             except discord.Forbidden:
                 await interaction.followup.send(
-                    "No pude crear el rol. Revisá que tenga el permiso Gestionar roles.",
+                    "No pude crear el rol. Revisá que el bot tenga el permiso Gestionar roles.",
                     ephemeral=True,
                 )
                 return
 
-        bot_member = guild.me
         if bot_member is None or not bot_member.guild_permissions.manage_roles:
             await interaction.followup.send(
-                "Necesito el permiso **Gestionar roles** para configurar la verificación.",
+                "Necesito el permiso Gestionar roles para completar la verificación.",
                 ephemeral=True,
             )
             return
         if role >= bot_member.top_role:
             await interaction.followup.send(
-                "Mové el rol del bot por encima de **| AZULEJO |** en Ajustes del servidor → Roles.",
+                "Mové el rol del bot por encima de | AZULEJO | en Ajustes del servidor → Roles.",
                 ephemeral=True,
             )
             return
 
-        try:
-            await categoria.set_permissions(
-                guild.default_role,
-                view_channel=False,
-                reason="Ocultar categoría a miembros no verificados de AzureSMP",
-            )
-            await categoria.set_permissions(
-                role,
-                view_channel=True,
-                reason="Permitir acceso a la categoría a miembros verificados de AzureSMP",
-            )
-        except discord.Forbidden:
-            await interaction.followup.send(
-                "No pude cambiar los permisos de la categoría. Revisá que el bot tenga permisos para gestionar canales y roles.",
-                ephemeral=True,
-            )
-            return
-        except discord.HTTPException:
-            await interaction.followup.send(
-                "Discord no permitió actualizar la categoría. Intentá nuevamente.",
-                ephemeral=True,
-            )
-            return
+        if categoria is not None:
+            try:
+                await categoria.set_permissions(
+                    guild.default_role,
+                    view_channel=False,
+                    reason="Ocultar categoría a miembros no verificados de AzureSMP",
+                )
+                await categoria.set_permissions(
+                    role,
+                    view_channel=True,
+                    reason="Permitir acceso a la categoría a miembros verificados de AzureSMP",
+                )
+            except discord.Forbidden:
+                await interaction.followup.send(
+                    "No pude cambiar los permisos de la categoría. Revisá que el bot tenga permisos para gestionar canales.",
+                    ephemeral=True,
+                )
+                return
+            except discord.HTTPException:
+                await interaction.followup.send(
+                    "Discord no permitió actualizar la categoría. Intentá nuevamente.",
+                    ephemeral=True,
+                )
+                return
 
         embed = discord.Embed(
             title="🔷 Verificación | AzureSMP",
             description=(
                 "¡Bienvenido a **AzureSMP**!\\n\\n"
                 "Para desbloquear el acceso a los canales de la comunidad, "
-                "pulsá el botón **Verificarme** de abajo.\\n\\n"
+                "pulsá el botón **Verificación** de abajo.\\n\\n"
                 "Al completar la verificación recibirás el rol **| AZULEJO |**."
             ),
             color=discord.Color.from_rgb(0, 179, 255),
@@ -383,17 +383,24 @@ class AzureFeatures(commands.Cog):
             await interaction.channel.send(embed=embed, view=VerificationView())
         except discord.Forbidden:
             await interaction.followup.send(
-                "No puedo publicar el panel en este canal. Revisá los permisos para ver el canal y enviar mensajes.",
+                "No puedo publicar el panel en este canal. Revisá los permisos para enviar mensajes.",
                 ephemeral=True,
             )
             return
 
-        await interaction.followup.send(
-            f"Panel publicado en {interaction.channel.mention}.\\n"
-            f"La categoría {categoria.mention} ahora oculta sus canales a @everyone y permite verlos al rol **| AZULEJO |**.\\n\\n"
-            "Importante: los canales sincronizados heredan estos permisos. Revisá los canales no sincronizados y asegurate de que #verificacion esté fuera de esa categoría o siga siendo visible para @everyone.",
-            ephemeral=True,
-        )
+        if categoria is not None:
+            details = (
+                f"Panel publicado en {interaction.channel.mention}.\\n"
+                f"La categoría {categoria.mention} ahora oculta sus canales a @everyone y permite verlos al rol **| AZULEJO |**. "
+                "Asegurate de que #verificacion esté fuera de esa categoría."
+            )
+        else:
+            details = (
+                f"Panel publicado en {interaction.channel.mention}.\\n"
+                "No cambié permisos de categorías porque no elegiste ninguna. "
+                "Para que la verificación sea obligatoria, ocultá los demás canales a @everyone y permití verlos al rol | AZULEJO |."
+            )
+        await interaction.followup.send(details, ephemeral=True)
 
     @app_commands.command(name="applystaff", description="Abre el formulario para postularte al Staff")
     async def applystaff(self, interaction: discord.Interaction):
