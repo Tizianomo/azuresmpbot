@@ -2,11 +2,14 @@ import asyncio
 import secrets
 import logging
 import os
+import json
+from pathlib import Path
 
 import discord
 from discord import app_commands
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from discord.ext import commands
 
@@ -17,12 +20,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("discord_ping_bot")
 message_content_access = True
+bot_task: asyncio.Task | None = None
+runtime_token: str | None = None
 
 
 def require_bridge_token(
     token: str | None = Header(default=None, alias="X-Discord-Bridge-Token"),
 ) -> None:
-    expected = os.getenv("DISCORD_BOT_TOKEN")
+    expected = os.getenv("DISCORD_BOT_BRIDGE_TOKEN") or os.getenv("DISCORD_BOT_TOKEN")
     if not expected or not token or not secrets.compare_digest(token, expected):
         raise HTTPException(status_code=401, detail="No autorizado.")
 
@@ -98,6 +103,13 @@ api = FastAPI(
     openapi_url=None,
     dependencies=[Depends(require_bridge_token)],
 )
+api.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in os.getenv("DASHBOARD_ORIGINS", "*").split(",") if origin.strip()],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 class OutgoingMessage(BaseModel):
@@ -166,11 +178,77 @@ async def get_status() -> dict[str, object]:
     user = bot.user
     return {
         "connected": bot.is_ready() and user is not None,
+        "running": bot_task is not None and not bot_task.done(),
+        "state": "online" if bot.is_ready() and user is not None else ("connecting" if bot_task is not None and not bot_task.done() else "offline"),
         "username": user.name if user else None,
         "avatarUrl": str(user.display_avatar.url) if user else None,
         "guildCount": len(bot.guilds) if bot.is_ready() else 0,
         "messageContentEnabled": message_content_access,
     }
+
+
+@api.post("/internal/power/start")
+async def start_power() -> dict[str, object]:
+    global bot_task
+    if bot.is_ready():
+        return {"running": True, "connected": True, "state": "online", "message": "El bot ya está conectado."}
+    if bot_task is not None and not bot_task.done():
+        return {"running": True, "connected": False, "state": "connecting", "message": "El bot ya se está iniciando."}
+    if not runtime_token:
+        raise HTTPException(status_code=503, detail="No hay token de bot cargado en el proceso.")
+    bot_task = asyncio.create_task(start_bot(runtime_token), name="discord-gateway")
+    return {"running": True, "connected": False, "state": "connecting", "message": "Se solicitó iniciar el bot."}
+
+
+@api.post("/internal/power/stop")
+async def stop_power() -> dict[str, object]:
+    global bot_task
+    if bot_task is None or bot_task.done():
+        bot_task = None
+        return {"running": False, "connected": False, "state": "offline", "message": "El bot ya estaba apagado."}
+    if not bot.is_closed():
+        await bot.close()
+    try:
+        await asyncio.wait_for(bot_task, timeout=10)
+    except asyncio.TimeoutError:
+        bot_task.cancel()
+        try:
+            await bot_task
+        except asyncio.CancelledError:
+            pass
+    bot_task = None
+    return {"running": False, "connected": False, "state": "offline", "message": "Bot apagado. El panel web sigue activo."}
+
+
+@api.get("/internal/guilds/{guild_id}/warnings")
+async def get_warnings(guild_id: str) -> list[dict[str, object]]:
+    try:
+        numeric_id = int(guild_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="ID de servidor inválido.") from error
+    path = Path(os.getenv("AZURE_DATA_FILE", "azure_data.json"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    warnings = data.get("warnings", {})
+    results: list[dict[str, object]] = []
+    prefix = str(numeric_id) + ":"
+    for key, entries in warnings.items():
+        if not key.startswith(prefix):
+            continue
+        user_id = key.split(":", 1)[1]
+        member = bot.get_guild(numeric_id).get_member(int(user_id)) if bot.get_guild(numeric_id) else None
+        for entry in entries[-20:]:
+            results.append({
+                "userId": user_id,
+                "username": member.display_name if member else "Usuario " + user_id,
+                "moderatorId": str(entry.get("moderator", "")),
+                "reason": str(entry.get("reason", "Sin motivo")),
+                "timestamp": int(entry.get("timestamp", 0)),
+            })
+    results.sort(key=lambda item: item["timestamp"], reverse=True)
+    return results[:100]
 
 
 @api.get("/internal/guilds")
@@ -313,6 +391,8 @@ async def start_bot(token: str) -> None:
 
 
 async def run_services(token: str) -> None:
+    global bot_task, runtime_token
+    runtime_token = token
     bot_task = asyncio.create_task(start_bot(token), name="discord-gateway")
     server = uvicorn.Server(
         uvicorn.Config(
@@ -328,7 +408,12 @@ async def run_services(token: str) -> None:
     finally:
         if not bot.is_closed():
             await bot.close()
-        await bot_task
+        if bot_task is not None:
+            try:
+                await asyncio.wait_for(bot_task, timeout=10)
+            except asyncio.TimeoutError:
+                bot_task.cancel()
+            bot_task = None
 
 
 async def run_bot() -> None:

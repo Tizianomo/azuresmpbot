@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#07111f">
+<title>AzureSMP • Control Panel</title>
+<style>
+:root{color-scheme:dark;--bg:#07111f;--panel:#101e30;--panel2:#14263c;--line:#243b56;--text:#edf7ff;--muted:#94abc3;--blue:#00b3ff;--green:#28dba1;--red:#ff647c}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0%,#0c2c43 0,transparent 34%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1120px;margin:auto;padding:22px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}.brand{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#00fbce,#009bdd);display:grid;place-items:center;color:#062033;font-size:23px;font-weight:900}.brand h1{font-size:20px;margin:0}.brand p{margin:2px 0;color:var(--muted);font-size:12px}
+.panel{background:linear-gradient(160deg,#12243a,#0c1929);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:16px;box-shadow:0 12px 32px #0002}.panel h2{font-size:16px;margin:0 0 12px}.muted{color:var(--muted);font-size:13px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.statusrow{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.state{display:inline-flex;align-items:center;gap:8px;font-weight:700}.dot{width:9px;height:9px;border-radius:50%;background:#6b7c91}.dot.online{background:var(--green);box-shadow:0 0 14px #28dba177}.dot.connecting{background:#ffd166}
+button,input,select,textarea{font:inherit}button{border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--panel2);color:var(--text);font-weight:700;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.primary{background:linear-gradient(135deg,#00c9ff,#008fdb);border:0;color:#041522}.danger{background:#421c2b;border-color:#793348;color:#ffdbe2}.success{background:#103a35;border-color:#1c6256;color:#c9fff0}.btnrow{display:flex;gap:9px;flex-wrap:wrap}.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wide{grid-column:1/-1}label{display:block;color:var(--muted);font-size:12px;margin:0 0 5px}input,select,textarea{width:100%;background:#071421;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;outline:none}textarea{min-height:115px;resize:vertical}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px}.tabs button.active{border-color:var(--blue);color:#9de7ff}.tab{display:none}.tab.active{display:block}.output{white-space:pre-wrap;overflow-wrap:anywhere;background:#06111d;border:1px solid var(--line);padding:12px;border-radius:10px;min-height:80px;max-height:340px;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,monospace}.notice{padding:10px 12px;border:1px solid #31516d;background:#0b2134;border-radius:10px;color:#b7d8f4;font-size:13px}.commandlist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.command{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0a1726}.command strong{color:#9de7ff}.foot{color:var(--muted);font-size:12px;text-align:center;padding:12px}
+@media(max-width:680px){main{padding:13px}.grid,.fields,.commandlist{grid-template-columns:1fr}.wide{grid-column:auto}header{align-items:flex-start}.panel{padding:14px}}
+</style>
+</head>
+<body>
+<main>
+<header><div class="brand"><div class="logo">A</div><div><h1>AzureSMP</h1><p>CONTROL PANEL · DISCORD BOT</p></div></div><button id="refresh">Actualizar estado</button></header>
+<section class="panel">
+<h2>Conexión segura</h2>
+<div class="fields">
+<div><label for="apiBase">URL de la API del bot (HTTPS)</label><input id="apiBase" placeholder="https://tu-host:8000"></div>
+<div><label for="apiKey">Clave privada del panel</label><input id="apiKey" type="password" placeholder="DISCORD_BOT_BRIDGE_TOKEN"></div>
+</div>
+<div class="btnrow" style="margin-top:10px"><button class="primary" id="connect">Conectar panel</button><button id="forget">Borrar datos de esta sesión</button></div>
+<p class="muted">Usá una clave de panel independiente. No pegues el token del bot de Discord en una página web.</p>
+</section>
+<section class="panel">
+<div class="statusrow"><div><h2 style="margin-bottom:4px">Estado del bot</h2><div class="state"><span class="dot" id="dot"></span><span id="stateText">Desconectado del panel</span></div><p class="muted" id="stateDetails">Conectá la API para consultar el estado.</p></div>
+<div class="btnrow"><button class="success" id="powerOn" disabled>⏻ Prender bot</button><button class="danger" id="powerOff" disabled>■ Apagar bot</button></div></div>
+<div class="notice" style="margin-top:12px">Al apagarlo se desconecta de Discord, pero el proceso de Python y la API deben seguir activos para que el botón Prender pueda volver a conectarlo. El hosting también debe mantener el proceso ejecutándose 24/7.</div>
+</section>
+<div class="tabs">
+<button class="active" data-tab="announcements">Anuncios</button><button data-tab="logs">Registros / Transcripciones</button><button data-tab="sanctions">Sanciones</button><button data-tab="economy">Economía</button>
+</div>
+<section class="panel tab active" id="announcements">
+<h2>📣 Publicar anuncio en Discord</h2>
+<div class="fields">
+<div><label for="guild">Servidor de Discord</label><select id="guild"><option value="">Conectá la API primero</option></select></div>
+<div><label for="channel">Canal de destino</label><select id="channel"><option value="">Elegí un servidor</option></select></div>
+<div class="wide"><label for="message">Mensaje</label><textarea id="message" maxlength="2000" placeholder="Escribí el anuncio para tu comunidad..."></textarea></div>
+</div>
+<div class="btnrow" style="margin-top:10px"><button class="primary" id="sendAnnouncement" disabled>Enviar anuncio</button></div>
+<p class="muted">El bot necesita permiso para ver el canal y enviar mensajes. Las menciones no notifican a todos automáticamente.</p>
+</section>
+<section class="panel tab" id="logs">
+<h2>📜 Registros y transcripciones</h2>
+<div class="fields">
+<div><label for="logGuild">Servidor</label><select id="logGuild"><option value="">Elegí un servidor</option></select></div>
+<div><label for="logChannel">Canal a consultar</label><select id="logChannel"><option value="">Elegí un canal</option></select></div>
+</div>
+<div class="btnrow" style="margin:10px 0"><button id="loadLogs">Cargar últimos mensajes</button><button id="exportLogs" disabled>Exportar transcripción .txt</button></div>
+<pre class="output" id="logsOutput">Los mensajes aparecerán acá.</pre>
+<p class="muted">La transcripción incluye los últimos mensajes que el bot pueda leer. Para tickets cerrados, guardá una copia antes de eliminar el canal.</p>
+</section>
+<section class="panel tab" id="sanctions">
+<h2>⚖️ Historial de sanciones</h2>
+<div class="fields"><div><label for="sanctionGuild">Servidor</label><select id="sanctionGuild"><option value="">Elegí un servidor</option></select></div></div>
+<div class="btnrow" style="margin:10px 0"><button id="loadSanctions">Consultar sanciones</button></div>
+<pre class="output" id="sanctionsOutput">Las advertencias guardadas aparecerán acá.</pre>
+<p class="muted">Esta vista muestra las advertencias que estén guardadas en azure_data.json; no inventa sanciones ni sustituye los registros de auditoría de Discord.</p>
+</section>
+<section class="panel tab" id="economy">
+<h2>💎 Comandos de economía</h2>
+<p class="muted">Comandos disponibles con prefijo punto. Cantidades admitidas: 10k · 2m · 50% · all · todo.</p>
+<div class="commandlist">
+<div class="command"><strong>CUENTA</strong><br>.bal · .dep · .with · .pay · .cooldowns</div>
+<div class="command"><strong>RECOMPENSAS</strong><br>.daily · .weekly · .collect</div>
+<div class="command"><strong>ACTIVIDADES</strong><br>.work · .crime · .rob · .beg · .search · .fish · .mine · .hunt</div>
+<div class="command"><strong>CASINO</strong><br>.bj · .hilo · .slots · .coinflip · .dice · .roulette · .rps · .scratch · .ludopatia</div>
+<div class="command"><strong>TIENDA</strong><br>.shopitems · .shopinfo · .buy · .sell · .inventory · .use</div>
+<div class="command"><strong>RANKINGS</strong><br>.top · .top -cash · .top -bank · .top -total · .rankeco · .profile · .networth</div>
+</div>
+<p class="muted">Páginas del ranking: .top -cash 2. El casino usa únicamente dinero virtual.</p>
+</section>
+<div class="foot">AzureSMP · Panel de administración · No compartas tu clave privada.</div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let guilds = [];
+let lastMessages = [];
+function apiBase(){return $("apiBase").value.trim().replace(/\/+$/,"");}
+function headers(){return {"X-Discord-Bridge-Token":$("apiKey").value.trim(),"Content-Type":"application/json"};}
+async function request(path, options){
+  if(!apiBase() || !$("apiKey").value.trim()) throw new Error("Completá la URL de la API y la clave privada del panel.");
+  const res=await fetch(apiBase()+path,{...options,headers:{...headers(),...(options&&options.headers||{})}});
+  let data={}; try{data=await res.json();}catch(e){}
+  if(!res.ok) throw new Error(data.detail||("Error HTTP "+res.status));
+  return data;
+}
+function status(state,details){
+  $("stateText").textContent=state;
+  $("stateDetails").textContent=details||"";
+  $("dot").className="dot "+(state==="Online"?"online":state==="Iniciando"?"connecting":"");
+}
+function showError(error){alert(error.message||String(error));}
+async function refreshStatus(){
+  try{
+    const d=await request("/internal/status");
+    const s=d.state==="online"?"Online":d.state==="connecting"?"Iniciando":"Offline";
+    status(s,(d.username?"Cuenta: "+d.username+" · ":"")+"Servidores: "+(d.guildCount||0)+" · Message Content Intent: "+(d.messageContentEnabled?"activado":"revisar"));
+    $("powerOn").disabled=false;$("powerOff").disabled=false;
+  }catch(e){status("Sin conexión",e.message);$("powerOn").disabled=true;$("powerOff").disabled=true;}
+}
+function fillSelect(select,items,placeholder){
+  select.innerHTML=""; const first=document.createElement("option"); first.value=""; first.textContent=placeholder; select.appendChild(first);
+  for(const item of items){const o=document.createElement("option");o.value=item.id;o.textContent=item.name;select.appendChild(o);}
+}
+async function loadGuilds(){
+  guilds=await request("/internal/guilds");
+  ["guild","logGuild","sanctionGuild"].forEach(id=>fillSelect($(id),guilds,"Elegí un servidor"));
+  $("sendAnnouncement").disabled=false;
+}
+async function loadChannels(guildId,targetId){
+  if(!guildId){fillSelect($(targetId),[],"Elegí un servidor");return;}
+  const channels=await request("/internal/guilds/"+encodeURIComponent(guildId)+"/channels");
+  fillSelect($(targetId),channels.filter(c=>c.type==="text"),"Elegí un canal");
+}
+$("connect").addEventListener("click",async()=>{
+  sessionStorage.setItem("azureApiBase",apiBase());
+  try{await loadGuilds();await refreshStatus();alert("Panel conectado.");}catch(e){showError(e);}
+});
+$("forget").addEventListener("click",()=>{
+  sessionStorage.removeItem("azureApiBase");$("apiBase").value="";$("apiKey").value="";status("Desconectado","Datos de conexión borrados de esta sesión.");
+});
+$("refresh").addEventListener("click",refreshStatus);
+$("guild").addEventListener("change",async()=>{try{await loadChannels($("guild").value,"channel");}catch(e){showError(e);}});
+$("logGuild").addEventListener("change",async()=>{try{await loadChannels($("logGuild").value,"logChannel");}catch(e){showError(e);}});
+$("sendAnnouncement").addEventListener("click",async()=>{
+  const channel=$("channel").value,content=$("message").value.trim();
+  if(!channel||!content)return alert("Elegí un canal y escribí el anuncio.");
+  try{await request("/internal/channels/"+encodeURIComponent(channel)+"/messages",{method:"POST",body:JSON.stringify({content})});$("message").value="";alert("Anuncio enviado.");}catch(e){showError(e);}
+});
+$("loadLogs").addEventListener("click",async()=>{
+  const channel=$("logChannel").value;if(!channel)return alert("Elegí un canal.");
+  try{
+    const d=await request("/internal/channels/"+encodeURIComponent(channel)+"/messages?limit=100");
+    lastMessages=d.messages||[];
+    $("logsOutput").textContent=lastMessages.map(m=>"["+m.timestamp+"] "+m.authorName+": "+m.content).join("\n")||"No hay mensajes o el canal está vacío.";
+    $("exportLogs").disabled=lastMessages.length===0;
+  }catch(e){showError(e);}
+});
+$("exportLogs").addEventListener("click",()=>{
+  const text=lastMessages.map(m=>"["+m.timestamp+"] "+m.authorName+" ("+m.authorId+"): "+m.content).join("\n");
+  const blob=new Blob([text],{type:"text/plain;charset=utf-8"});const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download="azuresmp-transcripcion.txt";a.click();URL.revokeObjectURL(url);
+});
+$("loadSanctions").addEventListener("click",async()=>{
+  const id=$("sanctionGuild").value;if(!id)return alert("Elegí un servidor.");
+  try{
+    const rows=await request("/internal/guilds/"+encodeURIComponent(id)+"/warnings");
+    $("sanctionsOutput").textContent=rows.map(r=>"["+new Date(r.timestamp*1000).toLocaleString()+"] "+r.username+" · Motivo: "+r.reason+" · Moderador ID: "+r.moderatorId).join("\n")||"No hay advertencias guardadas.";
+  }catch(e){showError(e);}
+});
+$("powerOn").addEventListener("click",async()=>{
+  try{const d=await request("/internal/power/start",{method:"POST"});status("Iniciando",d.message);setTimeout(refreshStatus,3000);}catch(e){showError(e);}
+});
+$("powerOff").addEventListener("click",async()=>{
+  if(!confirm("¿Apagar el bot de Discord? El panel web seguirá activo mientras el proceso del hosting continúe encendido."))return;
+  try{const d=await request("/internal/power/stop",{method:"POST"});status("Offline",d.message);}catch(e){showError(e);}
+});
+document.querySelectorAll("[data-tab]").forEach(btn=>btn.addEventListener("click",()=>{
+  document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b===btn));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.id===btn.dataset.tab));
+}));
+$("apiBase").value=sessionStorage.getItem("azureApiBase")||"";
+</script>
+</body>
+</html>
